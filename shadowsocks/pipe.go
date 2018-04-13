@@ -6,6 +6,8 @@ import (
 	"io"
 	"net"
 	"time"
+
+	"github.com/shadowsocks/shadowsocks-go/statistics"
 )
 
 func SetReadTimeout(c net.Conn) {
@@ -15,13 +17,14 @@ func SetReadTimeout(c net.Conn) {
 }
 
 // PipeThenClose copies data from src to dst, closes dst when done.
-func PipeThenClose(src, dst net.Conn) {
+func PipeThenClose(src, dst net.Conn, accountName string) {
 	defer dst.Close()
 	buf := leakyBuf.Get()
 	defer leakyBuf.Put(buf)
 	for {
 		SetReadTimeout(src)
 		n, err := src.Read(buf)
+		statistics.SendTrafficCnt(accountName, int64(n))
 		// read may return EOF with n > 0
 		// should always process n > 0 bytes before handling error
 		if n > 0 {
@@ -46,7 +49,7 @@ func PipeThenClose(src, dst net.Conn) {
 }
 
 // PipeThenClose copies data from src to dst, closes dst when done, with ota verification.
-func PipeThenCloseOta(src *Conn, dst net.Conn) {
+func PipeThenCloseOta(src *Conn, dst net.Conn, accountName string) {
 	const (
 		dataLenLen  = 2
 		hmacSha1Len = 10
@@ -71,6 +74,7 @@ func PipeThenCloseOta(src *Conn, dst net.Conn) {
 		dataLen := binary.BigEndian.Uint16(buf[:dataLenLen])
 		expectedHmacSha1 := buf[dataLenLen:idxData0]
 
+		statistics.SendTrafficCnt(accountName, int64(dataLen))
 		var dataBuf []byte
 		if len(buf) < int(idxData0+dataLen) {
 			dataBuf = make([]byte, dataLen)

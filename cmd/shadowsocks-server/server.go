@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+
 	"encoding/binary"
 	"errors"
 	"flag"
@@ -168,12 +169,18 @@ func handleConnection(conn *ss.Conn, auth bool) {
 	if debug {
 		debug.Printf("piping %s<->%s ota=%v connOta=%v", conn.RemoteAddr(), host, ota, conn.IsOta())
 	}
-	if ota {
-		go ss.PipeThenCloseOta(conn, remote)
-	} else {
-		go ss.PipeThenClose(conn, remote)
+
+	accountName := conn.LocalAddr().String()
+	v := strings.Split(accountName, ":")
+	if len(v) >= 2 {
+		accountName = v[1]
 	}
-	ss.PipeThenClose(remote, conn)
+	if ota {
+		go ss.PipeThenCloseOta(conn, remote, accountName)
+	} else {
+		go ss.PipeThenClose(conn, remote, accountName)
+	}
+	ss.PipeThenClose(remote, conn, accountName)
 	closed = true
 	return
 }
@@ -288,7 +295,7 @@ func updatePasswd() {
 		}
 	}
 	// port password still left in the old config should be closed
-	for port, _ := range oldconfig.PortPassword {
+	for port := range oldconfig.PortPassword {
 		log.Printf("closing port %s as it's deleted\n", port)
 		passwdManager.del(port)
 	}
@@ -403,7 +410,7 @@ func main() {
 	flag.IntVar(&cmdConfig.Timeout, "t", 300, "timeout in seconds")
 	flag.StringVar(&cmdConfig.Method, "m", "", "encryption method, default: aes-256-cfb")
 	flag.IntVar(&core, "core", 0, "maximum number of CPU cores to use, default is determinied by Go runtime")
-	flag.BoolVar((*bool)(&debug), "d", false, "print debug message")
+	flag.BoolVar((*bool)(&debug), "d", true, "print debug message")
 	flag.BoolVar(&udp, "u", false, "UDP Relay")
 	flag.Parse()
 
